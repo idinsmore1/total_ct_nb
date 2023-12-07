@@ -92,12 +92,13 @@ class CTScan:
             self.header_info['spacing'] = [self.header_info['length_mm'], self.header_info['width_mm'], self.header_info['slice_thickness_mm']]
         self.spacing = self.header_info['spacing']
         
-    def save_dicom_header(self, input_folder):
+    def load_dicom_header(self, input_folder):
         """
-        Method that saves the dicom header as a json file and sets self.header_data to be that json \n
+        Method that loads the dicom header and sets self.header_data to be a dictionary containing the info \n
         :param header: the dicom header object
         """
-        header = pydicom.dcmread(glob(f'{input_folder}/*')[0])
+        dicom_file = glob(f'{input_folder}/*')[0]
+        header = pydicom.dcmread(dicom_file)
         series_info = {}
         # Loop through all the important attributes
         for tag, column in self.important_attributes.items():
@@ -146,7 +147,8 @@ class CTScan:
         series_info['spacing'] = [float(header.PixelSpacing[0]), float(header.PixelSpacing[1]), float(header.SliceThickness)]
         self.header_info = series_info
         self.set_header_attr()
-
+        self.first_dicom = dicom_file
+        # copy(dicom_file, f'{self.base_dir}/{self.mrn}/{self.accession}/{self.series_name}')
     
     def convert_dir_to_nifti(self, input_folder):
         num_files = len(glob(f'{input_folder}/*'))
@@ -154,11 +156,12 @@ class CTScan:
             print(f'Conversion will not occur, less than 20 dicom files in folder {input_folder}.')
             self.usable = False
             return
-        self.save_dicom_header(input_folder)
+        self.load_dicom_header(input_folder)
         self.output_dir = f'{self.base_dir}/{self.mrn}/{self.accession}/{self.series_name}'
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
         try:
+            copy(self.first_dicom, self.output_dir)
             print(f'Converting {input_folder} to Nifti Format...')    
             settings.enable_resampling = True
             settings.resampling_order = 1

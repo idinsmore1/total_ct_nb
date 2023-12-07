@@ -1,4 +1,5 @@
 import os
+from functools import partial
 from multiprocessing import Pool
 from shutil import rmtree
 from types import SimpleNamespace
@@ -41,13 +42,15 @@ def instantiate_batch(batch_list, args, num_workers):
     :param args: the input arguments to main.py
     :return: A list of CTScan Instances (necessary for keeping track of filepaths)
     """
-    input_cts = []
-    for ct in tqdm(batch_list):
-        input_cts.append(instantiate_ct(ct, args.output_dir, args.save_copy))
-    return input_cts
-    # self.input_cts = input_cts
-    # with Pool(processes=num_workers) as pool:
-    #     tasks = [(i, args.output_dir, args.save_copy) for i in batch_list]
-    #     input_cts = pool.starmap(instantiate_ct, tasks)
+    # input_cts = []
+    # for ct in tqdm(batch_list):
+    #     input_cts.append(instantiate_ct(ct, args.output_dir, args.save_copy))
     # return input_cts
+    # self.input_cts = input_cts
+    partial_instantiate = partial(instantiate_ct, output_dir=args.output_dir, save_copy=args.save_copy)
+    with Pool(processes=num_workers) as pool:
+        tasks = [(i, args.output_dir, args.save_copy) for i in batch_list]
+        input_cts = pool.starmap(instantiate_ct, tasks)
+        # input_cts = pool.imap(partial_instantiate, batch_list)
+    return input_cts
             

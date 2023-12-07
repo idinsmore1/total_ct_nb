@@ -214,8 +214,10 @@ class TotalSeg(CTBatch):
                 name = ct_name.replace('.nii.gz', '')
                 new_name = f'{name}_{task_id}.nii.gz'
                 move(ct_name, new_name)
-        # self._combine_task_outputs(task_id_list, task)
-        combine_multi_mask_mp(self.batch_data, task_id_list, task, self.tmp_out)
+        # No multiprocessing
+        self._combine_task_outputs(task_id_list, task)
+        # Multiprocessing
+        # combine_multi_mask_mp(self.batch_data, task_id_list, task, self.tmp_out)
          
     
     def _combine_task_outputs(self, task_id_list, task):
