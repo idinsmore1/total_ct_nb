@@ -52,7 +52,7 @@ class CurvedPlanarReformation(Centerline):
                         'avg_diam': avg_diam,
                         'major_diam': major_diam,
                         'minor_diam': minor_diam,
-                        'slice_idx': float(round(self.centerline[i][0], 1))
+                        'slice_idx': round(float(self.centerline[i][0]), 1)
                     }
         self.diameters = measurements
         

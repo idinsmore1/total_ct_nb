@@ -32,10 +32,10 @@ class ThoracicAortaCPR(CurvedPlanarReformation):
         """
         asc_max, asc_max_key = self.get_max_diameter(self.asc_diameters)
         asc_comps = self.closest_measured_diameters(self.asc_diameters, asc_max_key)
-        asc_max['asc_comp_diams'] = asc_comps
+        asc_max['comp_diams'] = asc_comps
         desc_max, desc_max_key = self.get_max_diameter(self.desc_diameters)
         desc_comps = self.closest_measured_diameters(self.desc_diameters, desc_max_key)
-        desc_max['asc_comp_diams'] = desc_comps
+        desc_max['comp_diams'] = desc_comps
         return asc_max, desc_max
     
     def _split_thoracic_aorta(self):
