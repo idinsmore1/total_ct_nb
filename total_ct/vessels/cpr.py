@@ -16,8 +16,7 @@ class CurvedPlanarReformation(Centerline):
         # Initialize the centerline class
         super().__init__(orig_img, segmentation, spacing, task, vessel)
         self.kimimaro_const = kimimaro_const
-        
-        
+    
     def create_straightened_cpr(self, grid_size: int=80) -> cp.ndarray:
         """Method to create the straightened CPR using the vessel and centerline
         :param grid_size: the length of the side of the sampling grid around the centerline in mm. Default=80

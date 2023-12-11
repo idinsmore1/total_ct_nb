@@ -59,7 +59,7 @@ class CTScan:
             self.convert_dir_to_nifti(input_ct)
         else:
             # if the input is not a nifti file or dicom folder, set self.usable to be false
-            print('Input path is not a Nifti file or Dicom folder, will be skipped in analysis.\n')
+            print(f'Input {input_ct} is not a Nifti file or Dicom folder, will be skipped in analysis.\n')
             self.usable = False
             
     def set_nifti_attr(self, input_ct, save_copy):
@@ -67,15 +67,17 @@ class CTScan:
         nifti_folder = '/'.join(input_ct.split('/')[:-1])
         self.input = [input_ct]
         self.nii_file_name = [x.split('/')[-1].replace('.nii.gz', '') for x in self.input]
+        
         if os.path.exists(f'{nifti_folder}/header_info.json'):
             self.set_header_attr(f'{nifti_folder}/header_info.json')
             self.usable = True
         else:
             print(f'{input_ct} has no header file, it will be skipped in analysis\n')
             self.usable = False
+        # Set the output directory 
         self.output_dir = f'{self.base_dir}/{self.mrn}/{self.accession}/{self.series_name}/'
         if not os.path.exists(self.output_dir):
-            print(f'Output path does not exist, generating {self.output_dir}')
+            print(f'Output path does not exist, generating {self.output_dir}\n')
             os.makedirs(self.output_dir)
         if save_copy:
             copy(input_ct, self.output_dir)
@@ -153,7 +155,7 @@ class CTScan:
     def convert_dir_to_nifti(self, input_folder):
         num_files = len(glob(f'{input_folder}/*'))
         if num_files < 20:
-            print(f'Conversion will not occur, less than 20 dicom files in folder {input_folder}.')
+            print(f'Conversion will not occur, less than 20 dicom files in folder {input_folder}.\n')
             self.usable = False
             return
         self.load_dicom_header(input_folder)
@@ -162,7 +164,7 @@ class CTScan:
             os.makedirs(self.output_dir)
         try:
             copy(self.first_dicom, self.output_dir)
-            print(f'Converting {input_folder} to Nifti Format...')    
+            print(f'Converting {input_folder} to Nifti Format...\n')    
             settings.enable_resampling = True
             settings.resampling_order = 1
             settings.reorient_nifti = False
@@ -177,6 +179,6 @@ class CTScan:
             self.input = nifti_files
         
         except Exception as e:
-            print(f"Error converting DICOM to NIfTI: {e} - will be skipped in analysis")
+            print(f"Error converting DICOM to NIfTI: {e} - will be skipped in analysis\n")
             self.usable = False
             return None
