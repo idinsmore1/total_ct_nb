@@ -3,6 +3,7 @@ import numpy as np
 import kimimaro
 
 from cupyx.scipy.ndimage import zoom
+from scipy.ndimage import median_filter
 from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
 
@@ -18,7 +19,6 @@ class Centerline(Vessel):
         """Primary method to create the centerline of the vessel
         :param kimimaro_const: the constant to use with kimimaro centerline generation, approximate average diameter of whatever vessel your creating a centerline for
         """
-        print('Creating centerline...')
         if self.spacing[0] > 1:
             self.vessel, self.vspacing = self._resample_vessel()
         else:
@@ -26,11 +26,16 @@ class Centerline(Vessel):
             self.vspacing = self.spacing
         # Generate the centerline
         raw_centerline = self._kimimaro_centerline(kimimaro_const)
+        # self.centerline = cp.asanyarray(raw_centerline)
         # Uniformly space the centerline points
         uniform_centerline = self.arclength_sample(raw_centerline)
         # Apply savitzky-golay filtering to smooth the centerline
         smoothed_centerline = cp.asarray(self.savitzky_golay_filter(uniform_centerline))
         self.centerline = smoothed_centerline
+        # Smooth the centerline with median filtering
+        # window_size = raw_centerline.shape[0] // points
+        # smoothed_centerline = self.smooth_centerline(raw_centerline)
+        # self.centerline = cp.asarray(smoothed_centerline)
     
     def _kimimaro_centerline(self, kimimaro_const: int) -> cp.ndarray:
         """Internal Method to create a kimimaro centerline
@@ -43,7 +48,7 @@ class Centerline(Vessel):
                 'scale': 5
             },
             anisotropy=self.vspacing,
-            progress=True
+            progress=False
         )
         # If no centerline could be generated, return None
         if len(skels) == 0:
@@ -103,6 +108,27 @@ class Centerline(Vessel):
 
         return np.asarray(ordered_vertices)
     
+    # @classmethod
+    # def smooth_centerline(cls, centerline, window_size=20):
+    #     return median_filter(centerline, size=(window_size, 1))
+    
+#     @classmethod
+#     def evenly_sample_centerline(cls, centerline, num_samples):
+#         # Calculate the cumulative distance along the centerline
+#         distances = np.cumsum(np.r_[0, np.linalg.norm(np.diff(centerline, axis=0), axis=1)])
+#         total_length = distances[-1]
+        
+#         # Create an interpolation function for each dimension
+#         f_z = interp1d(distances, centerline[:, 0])
+#         f_y = interp1d(distances, centerline[:, 1])
+#         f_x = interp1d(distances, centerline[:, 2])
+        
+#         # Evenly sample distances along the centerline
+#         sample_points = np.linspace(0, total_length, num_samples)
+#         # Sample the centerline
+#         sampled_centerline = np.column_stack((f_z(sample_points), f_y(sample_points), f_x(sample_points)))
+#         return sampled_centerline
+    
     @classmethod
     def arclength_sample(cls, centerline: np.ndarray):
         """
@@ -122,7 +148,7 @@ class Centerline(Vessel):
         return uniform_centerline
 
     @classmethod
-    def savitzky_golay_filter(cls, uniform_centerline: np.ndarray, points: int=5, polyorder: int=2):
+    def savitzky_golay_filter(cls, uniform_centerline: np.ndarray, points: int=9, polyorder: int=2):
         """
         Apply Savitzky-Golay filtering to the uniform centerline for a smoother centerline
         Will help with perpendicular measurements later
@@ -144,12 +170,10 @@ class Centerline(Vessel):
         to 1mm thickness, while maintaining x,y pixel spacing
         :return: a list containing [resampled_vessel, resampled_pixel_spacing]
         """
-        print(f'Reformatting segmentation to 1mm slice thickness...')
         # Set the new shape - number of z slices = z-slices * current z spacing 
         # Ex: 100 slices at 3mm thickness = 300 slices at 1mm thickness
         new_shape = (int(self.seg.shape[0] * self.spacing[0]), *self.seg.shape[1:])
         zoom_factors = [new / old for new, old in zip(new_shape, self.seg.shape)]
         new_vessel = zoom(self.seg, zoom_factors, order=1, mode='nearest')
         new_spacing = (1.0, *self.spacing[1:])
-        print('Done!\n')
         return new_vessel, new_spacing

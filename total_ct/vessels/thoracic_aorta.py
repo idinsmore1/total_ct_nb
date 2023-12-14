@@ -22,6 +22,8 @@ class ThoracicAortaCPR(CurvedPlanarReformation):
                                 'minor_diam': minor_diam,
                                 'slice_idx': round(float(centerline[i][0]), 1)
                             }
+            if len(measurements) == 0:
+                measurements = None
             if name == 'asc':
                 self.asc_diameters = measurements
             else:
@@ -30,12 +32,18 @@ class ThoracicAortaCPR(CurvedPlanarReformation):
     def find_max_diameter(self):
         """Method to find the max diameter of the ascending and descending aorta
         """
-        asc_max, asc_max_key = self.get_max_diameter(self.asc_diameters)
-        asc_comps = self.closest_measured_diameters(self.asc_diameters, asc_max_key)
-        asc_max['comp_diams'] = asc_comps
-        desc_max, desc_max_key = self.get_max_diameter(self.desc_diameters)
-        desc_comps = self.closest_measured_diameters(self.desc_diameters, desc_max_key)
-        desc_max['comp_diams'] = desc_comps
+        if self.asc_diameters is not None:
+            asc_max, asc_max_key = self.get_max_diameter(self.asc_diameters)
+            asc_comps = self.closest_measured_diameters(self.asc_diameters, asc_max_key)
+            asc_max['comp_diams'] = asc_comps
+        else:
+            asc_max = {}
+        if self.desc_diameters is not None:
+            desc_max, desc_max_key = self.get_max_diameter(self.desc_diameters)
+            desc_comps = self.closest_measured_diameters(self.desc_diameters, desc_max_key)
+            desc_max['comp_diams'] = desc_comps
+        else:
+            desc_max = {}
         return asc_max, desc_max
     
     def _split_thoracic_aorta(self):
@@ -46,7 +54,7 @@ class ThoracicAortaCPR(CurvedPlanarReformation):
         self.desc_centerline = self.centerline[arch_peak:]
         self.arch_split = self._find_arch_split()
         
-    def _find_arch_split(self, min_pixel_area=500) -> int:
+    def _find_arch_split(self, min_pixel_area=300) -> int:
         """Internal method to find the z-slice that represents the end of the aortic arch
         :param min_pixel_area: the minimum area that both asc and desc aorta need to be to finalize z-slice
         :return: the split index

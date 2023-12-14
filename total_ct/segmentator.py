@@ -42,6 +42,34 @@ class Segmentator(CTBatch):
                 self.batch_inference(task)
                 self.postprocess_batch(task)
 
+    def load_batch_data(self):
+        "Extract usable meta-data from a batch of cts - use after calling set_up_batch()"
+        batch_data = {}
+        for ct in tqdm(self.input_cts, desc='Gathering Batch Meta-Data', dynamic_ncols=True):
+            if ct.usable:
+                # If input was a dicom folder, there could be > 1 nifti file created:
+                for i, nii in enumerate(ct.input):
+                    image = nib.load(nii)
+                    # img = np.asanyarray(image.dataobj, dtype=np.float32)
+                    # This should be equivalent
+                    img = image.dataobj[..., :].astype(np.float32)
+                    img_in = nib.Nifti1Image(img, image.affine)
+                    img_in = as_closest_canonical(img_in)
+                    batch_data[nii] = {
+                        'header': image.header,
+                        'img_in_orig': image,
+                        'img_in': img_in,
+                        'spacing': img_in.header.get_zooms(),
+                        'shape': img_in.shape,
+                        'affine': img_in.affine,
+                        'mrn': ct.mrn,
+                        'accession': ct.accession,
+                        'series_name': ct.series_name,
+                        'nii_file_name': ct.nii_file_name[i],
+                        'output_dir': f'{ct.output_dir}/{ct.nii_file_name[i]}_segs',
+                        'tmp_name': f'{ct.mrn}_{ct.accession}_{ct.series_name}_{ct.nii_file_name[i]}'
+                    }
+        self.batch_data = batch_data
     
     def preprocess_batch(self, task):
         task_config = self.model_configs[task]
@@ -76,7 +104,7 @@ class Segmentator(CTBatch):
                 print(f'splitting {nifti} into 3 parts...')
                 third = rsp_shape[2] // 3
                 margin = 20
-                img_in_rsp_data = img_in_rsp.dataobj[..., :]
+                img_in_rsp_data = img_in_rsp.dataobj[..., :].astype(np.float32)
                 nib.save(nib.Nifti1Image(img_in_rsp_data[:, :, :third+margin], img_in_rsp.affine),
                     f'{self.tmp_in}/{nifti_dict["tmp_name"]}_s01_0000.nii.gz')
                 nib.save(nib.Nifti1Image(img_in_rsp_data[:, :, third+1-margin:third*2+margin], img_in_rsp.affine),
@@ -203,11 +231,9 @@ class Segmentator(CTBatch):
                 seg_combined[img_part] = np.zeros(img_shape, dtype=np.uint8)
                 
                 for task_id in task_id_list:
-                    seg = nib.load(f'{self.tmp_out}/{img_part}_{task_id}.nii.gz').dataobj[..., :]
+                    seg = nib.load(f'{self.tmp_out}/{img_part}_{task_id}.nii.gz').dataobj[..., :].astype(np.uint8)
                     for jdx, class_name in class_map_5_parts[map_taskid_to_partname[task_id]].items():
                         seg_combined[img_part][seg == jdx] = class_map_inv[class_name]
-                        
-            for img_part in img_parts:
                 nib.save(nib.Nifti1Image(seg_combined[img_part], nifti_dict['rsp_affine']), f'{self.tmp_out}/{img_part}.nii.gz')
                 
     #### Postprocessing #######
@@ -275,31 +301,6 @@ class Segmentator(CTBatch):
         os.makedirs(self.tmp_out)
         print('Done!\n')
         
-    def load_batch_data(self):
-        "Extract usable meta-data from a batch of cts - use after calling set_up_batch()"
-        batch_data = {}
-        for ct in tqdm(self.input_cts, desc='Gathering Batch Meta-Data', dynamic_ncols=True):
-            if ct.usable:
-                # If input was a dicom folder, there could be > 1 nifti file created:
-                for i, nii in enumerate(ct.input):
-                    image = nib.load(nii)
-                    img_in = as_closest_canonical(image)
-                    batch_data[nii] = {
-                        'header': image.header,
-                        'img_in_orig': image,
-                        'img_in': img_in,
-                        'spacing': img_in.header.get_zooms(),
-                        'shape': img_in.shape,
-                        'affine': img_in.affine,
-                        'mrn': ct.mrn,
-                        'accession': ct.accession,
-                        'series_name': ct.series_name,
-                        'nii_file_name': ct.nii_file_name[i],
-                        'output_dir': f'{ct.output_dir}/{ct.nii_file_name[i]}_segs',
-                        'tmp_name': f'{ct.mrn}_{ct.accession}_{ct.series_name}_{ct.nii_file_name[i]}'
-                    }
-        self.batch_data = batch_data
-        
     def make_predictor(self):
         "Method to set up the nnUnet predictor that will load various weights"
         if torch.cuda.is_available():
@@ -321,7 +322,6 @@ class Segmentator(CTBatch):
             allow_tqdm=False
         )
     
-    ### Utility functions ###
     def _make_tmp_dirs(self):
         # Not sure yet if I want to set every CTScan instance to have tmp_in/tmp_out attributes
         tmp_in = f'{self.args.tmp_dir}/nnunet_pre'
@@ -411,7 +411,7 @@ def merge_multi_task_maps(nifti_dict, task_id_list, task, tmp_in, tmp_out):
         seg_combined[img_part] = np.zeros(img_shape, dtype=np.uint8)
 
         for task_id in task_id_list:
-            seg = nib.load(f'{tmp_out}/{img_part}_{task_id}.nii.gz').dataobj[..., :]
+            seg = nib.load(f'{tmp_out}/{img_part}_{task_id}.nii.gz').dataobj[..., :].astype(np.uint8)
             for jdx, class_name in class_map_5_parts[map_taskid_to_partname[task_id]].items():
                 seg_combined[img_part][seg == jdx] = class_map_inv[class_name]
 

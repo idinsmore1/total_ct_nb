@@ -16,7 +16,15 @@ class CurvedPlanarReformation(Centerline):
         # Initialize the centerline class
         super().__init__(orig_img, segmentation, spacing, task, vessel)
         self.kimimaro_const = kimimaro_const
-    
+        
+    def run_process(self, grid_size=80):
+        """Method to run and return the outputs of find_max_diameter"""
+        self.create_centerline(self.kimimaro_const)
+        self.create_straightened_cpr(grid_size)
+        self.measure_diameters()
+        measurements = self.find_max_diameter()
+        return measurements
+        
     def create_straightened_cpr(self, grid_size: int=80) -> cp.ndarray:
         """Method to create the straightened CPR using the vessel and centerline
         :param grid_size: the length of the side of the sampling grid around the centerline in mm. Default=80
@@ -60,7 +68,8 @@ class CurvedPlanarReformation(Centerline):
         """
         max_diameter, max_key = self.get_max_diameter(self.diameters)
         comps = self.closest_measured_diameters(self.diameters, max_key)
-        return max_diameter, comps
+        max_diameter['comp_diams'] = comps
+        return max_diameter
                 
     # Internal methods
     def _create_centerline_tangent_vectors(self) -> cp.ndarray:
@@ -151,7 +160,7 @@ class CurvedPlanarReformation(Centerline):
         return diameters[max_key], max_key
 
     @classmethod
-    def closest_measured_diameters(cls, diameters, max_key, num_vals=4):
+    def closest_measured_diameters(cls, diameters, max_key, num_vals=2):
         key_list = list(diameters.keys())
         # Handle end of list exceptions
         if max_key == key_list[0]:
@@ -170,11 +179,12 @@ class CurvedPlanarReformation(Centerline):
                 comp_keys = [key_list[i] for i in range(idx-split-1, idx+split)]
             else:
                 comp_keys = [key_list[i] for i in range(idx-split, idx+split+1)]
-        comp_dict = {}
+        comp_vals = []
         for key in comp_keys:
             diameter, slice_idx = diameters[key]['avg_diam'], round(diameters[key]['slice_idx'], 1)
-            comp_dict[slice_idx] = diameter
-        return comp_dict
+            comp_vals.append(diameter)
+        comp_ord = ' -> '.join([str(x) for x in comp_vals])
+        return comp_ord
 
     
 ###################### Generic functions that I don't want to assign to a class - could be used elsewhere ########

@@ -63,7 +63,8 @@ class CTScan:
             self.usable = False
             
     def set_nifti_attr(self, input_ct, save_copy):
-        """method to set the necessary attributes for a nifti file"""
+        """method to set the necessary attributes for a nifti file
+        """
         nifti_folder = '/'.join(input_ct.split('/')[:-1])
         self.input = [input_ct]
         self.nii_file_name = [x.split('/')[-1].replace('.nii.gz', '') for x in self.input]
