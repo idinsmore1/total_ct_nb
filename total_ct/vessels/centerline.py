@@ -19,19 +19,22 @@ class Centerline(Vessel):
         """Primary method to create the centerline of the vessel
         :param kimimaro_const: the constant to use with kimimaro centerline generation, approximate average diameter of whatever vessel your creating a centerline for
         """
-        if self.spacing[0] > 1:
+        if self.spacing[0] > 1 or self.spacing[0] < 0.75:
             self.vessel, self.vspacing = self._resample_vessel()
         else:
             self.vessel = self.seg
             self.vspacing = self.spacing
         # Generate the centerline
         raw_centerline = self._kimimaro_centerline(kimimaro_const)
+        raw_centerline = self.evenly_sample_centerline(raw_centerline, int(len(raw_centerline) * 0.5))
+        # smoothed_centerline = self.smooth_centerline(raw_centerline)
         # self.centerline = cp.asanyarray(raw_centerline)
         # Uniformly space the centerline points
         uniform_centerline = self.arclength_sample(raw_centerline)
         # Apply savitzky-golay filtering to smooth the centerline
-        smoothed_centerline = cp.asarray(self.savitzky_golay_filter(uniform_centerline))
-        self.centerline = smoothed_centerline
+        smoothed_centerline = self.savitzky_golay_filter(uniform_centerline)
+        
+        self.centerline = cp.asarray(smoothed_centerline)
         # Smooth the centerline with median filtering
         # window_size = raw_centerline.shape[0] // points
         # smoothed_centerline = self.smooth_centerline(raw_centerline)
@@ -60,6 +63,7 @@ class Centerline(Vessel):
         edges = skels[1].edges
         ordered = self.order_vertices(vertices, edges)
         return ordered
+    
     
     @classmethod
     def order_vertices(cls, vertices, edges) -> np.ndarray:
@@ -108,26 +112,26 @@ class Centerline(Vessel):
 
         return np.asarray(ordered_vertices)
     
-    # @classmethod
-    # def smooth_centerline(cls, centerline, window_size=20):
-    #     return median_filter(centerline, size=(window_size, 1))
+    @classmethod
+    def smooth_centerline(cls, centerline, window_size=20):
+        return median_filter(centerline, size=(window_size, 1))
     
-#     @classmethod
-#     def evenly_sample_centerline(cls, centerline, num_samples):
-#         # Calculate the cumulative distance along the centerline
-#         distances = np.cumsum(np.r_[0, np.linalg.norm(np.diff(centerline, axis=0), axis=1)])
-#         total_length = distances[-1]
+    @classmethod
+    def evenly_sample_centerline(cls, centerline, num_samples):
+        # Calculate the cumulative distance along the centerline
+        distances = np.cumsum(np.r_[0, np.linalg.norm(np.diff(centerline, axis=0), axis=1)])
+        total_length = distances[-1]
         
-#         # Create an interpolation function for each dimension
-#         f_z = interp1d(distances, centerline[:, 0])
-#         f_y = interp1d(distances, centerline[:, 1])
-#         f_x = interp1d(distances, centerline[:, 2])
+        # Create an interpolation function for each dimension
+        f_z = interp1d(distances, centerline[:, 0])
+        f_y = interp1d(distances, centerline[:, 1])
+        f_x = interp1d(distances, centerline[:, 2])
         
-#         # Evenly sample distances along the centerline
-#         sample_points = np.linspace(0, total_length, num_samples)
-#         # Sample the centerline
-#         sampled_centerline = np.column_stack((f_z(sample_points), f_y(sample_points), f_x(sample_points)))
-#         return sampled_centerline
+        # Evenly sample distances along the centerline
+        sample_points = np.linspace(0, total_length, num_samples)
+        # Sample the centerline
+        sampled_centerline = np.column_stack((f_z(sample_points), f_y(sample_points), f_x(sample_points)))
+        return sampled_centerline
     
     @classmethod
     def arclength_sample(cls, centerline: np.ndarray):

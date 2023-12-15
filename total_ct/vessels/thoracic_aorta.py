@@ -9,7 +9,11 @@ class ThoracicAortaCPR(CurvedPlanarReformation):
         self._split_thoracic_aorta()
         for name, centerline, cpr in zip(['asc', 'desc'], [self.asc_centerline, self.desc_centerline], [self.asc_cpr, self.desc_cpr]):
             measurements = {}
-            for i in range(centerline.shape[0]):
+            if name == 'asc':
+                iterator = range(int(len(self.asc_centerline) * 0.4), centerline.shape[0])
+            else:
+                iterator = range(centerline.shape[0])
+            for i in iterator:
                 if centerline[i][0] >= self.arch_split:
                     roi = self._smooth_cpr_slice(cpr[i])
                     if roi is not None and roi.sum() > 0:

@@ -8,7 +8,9 @@ import concurrent.futures as concurrent_futures
 import warnings
 
 from copy import deepcopy
+from glob import glob
 from multiprocessing import Pool
+from types import SimpleNamespace
 from tqdm import tqdm
 from torch import cuda
 from totalsegmentator.map_to_binary import class_map
@@ -25,7 +27,10 @@ if cuda_available:
 else:
     from skimage.measure import label, regionprops
 xp = cp if cuda_available else np
+# Only measure a subset of items
+total_map_indices = [*range(1, 25), *range(51, 69)]
 total_map = {k: v for k, v in class_map['total'].items() if k < 69}
+total_seg_map = {k: v for k, v in class_map['total'].items() if k in total_map_indices}
 
 class SegStats:
     """A class to take a list of input CTs generate by CTBatch post-segmentation and perform analysis on their segmentations"""
@@ -40,7 +45,7 @@ class SegStats:
             print('GPU Detected. Running analysis primarily using cupy\n')
         # Perform a quick usability check - all the output segmentations must exist
         if folders:
-            pass
+            self.completed_cts, self.missing_segs = self._folder_list_check(input_cts)
         else:
             self.completed_cts, self.missing_segs = self._ct_list_check(input_cts)
         # Load in the base data necessary for each CT
@@ -48,35 +53,55 @@ class SegStats:
     
     def process_segmentations(self, max_workers=4):
         """Run multiple threads in memory to speed up process"""
-        with concurrent_futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = [executor.submit(self.measure_segmentation, ct) for ct in self.completed_cts]
-            for future in tqdm(
-                concurrent_futures.as_completed(futures),
-                desc='Measuring segmentations',
-                total=len(self.completed_cts),
-                dynamic_ncols=True):
-                pass
-        #     # executor.map(self.measure_segmentation, self.completed_cts)
-        # for ct in tqdm(self.completed_cts, desc='Measuring Segmentations', dynamic_ncols=True):
-        #     self.measure_segmentation(ct)
+        # with concurrent_futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        #     futures = [executor.submit(self.measure_segmentation, ct) for ct in self.completed_cts]
+        #     for future in tqdm(
+        #             concurrent_futures.as_completed(futures),
+        #             desc='Measuring segmentations',
+        #             total=len(self.completed_cts),
+        #             dynamic_ncols=True):
+        #         pass
+        # # #     # executor.map(self.measure_segmentation, self.completed_cts)
+        for ct in tqdm(self.completed_cts, desc='Measuring Segmentations', dynamic_ncols=True):
+            self.measure_segmentation(ct)
             
     def measure_segmentation(self, ct):
         """Method to analyze all of the segmentations from the output of total_segmentator and save the results"""
-        try:
-            self.load_ct_attributes(ct)
-            self.measure_total_stats(ct)
-            self.measure_vertebrae_body_and_diameter(ct)
-            self.measure_tissue_stats(ct)
-            self.measure_aorta_stats(ct)
-            self.write_output(ct)
-        except Exception as e:
-            print(e)
+        # try:
+        self.load_ct_attributes(ct)
+        self.measure_total_stats(ct)
+        self.measure_vertebrae_body_and_diameter(ct)
+        self.measure_tissue_stats(ct)
+        self.measure_aorta_stats(ct)
+        if 'asc_aorta_avg_diam' in ct.aorta_stats:
+            if ct.aorta_stats['asc_aorta_avg_diam'] > 38:
+                with open('TAA_asc_segmentations.txt', 'a') as f:
+                    f.write(f'{ct.seg_folder}\n')
+
+        if 'desc_aorta_avg_diam' in ct.aorta_stats:
+            if ct.aorta_stats['desc_aorta_avg_diam'] > 38:
+                with open('TAA_desc_segmentations.txt', 'a') as f:
+                    f.write(f'{ct.seg_folder}\n')
+        if 'abd_aorta_avg_diam' in ct.aorta_stats:
+            if ct.aorta_stats['abd_aorta_avg_diam'] > 30:
+                with open('AAA_segmentations.txt', 'a') as f:
+                    f.write(f'{ct.seg_folder}\n')
+        self.write_output(ct)
+        with open('completed_seg_folders.txt', 'a') as f:
+            f.write(f'{ct.seg_folder}\n')
+                
+        # except Exception as e:
+        #     print(e)
+        #     self.missing_segs.append(f'{ct.seg_folder}')
+        #     with open('failed_seg_folders.txt', 'a') as f:
+        #         f.write(f'{ct.seg_folder}\n')
+
         
     ######### Measurement Methods ########
     def measure_total_stats(self, ct):
         total_stats = {}
         vox_vol = ct.pixel_measurements['voxel_volume_cm3']
-        for k, mask_name in total_map.items():
+        for k, mask_name in total_seg_map.items():
             data = ct.total_seg == k
             total_stats[f'{mask_name}_volume_cm3'] = round(float(data.sum() * vox_vol), 2)
             roi_mask = (data > 0)
@@ -200,7 +225,7 @@ class SegStats:
         if min_thor_midline is not None:
             thor_orig = ct.orig_img[..., min_thor_midline:]
             thor_segs = ct.total_seg[..., min_thor_midline:]
-            thor_aorta = ThoracicAortaCPR(thor_orig, thor_segs, spacing, 'total', 'aorta', 30)
+            thor_aorta = ThoracicAortaCPR(thor_orig, thor_segs, spacing, 'total', 'aorta', 35)
             asc_measurements, desc_measurements = thor_aorta.run_process(grid_size)
             asc_measurements = prefix_dict_keys(asc_measurements, 'asc_aorta')
             desc_measurements = prefix_dict_keys(desc_measurements, 'desc_aorta')
@@ -209,7 +234,6 @@ class SegStats:
             aorta_stats['thor_aorta_volume_mm3'] = thor_vol
             aorta_stats.update(asc_measurements)
             aorta_stats.update(desc_measurements)
-            
         ct.aorta_stats = aorta_stats
         
     def write_output(self, ct):
@@ -224,10 +248,14 @@ class SegStats:
                 final_stats.update(data)
         final_df = pd.DataFrame.from_dict(final_stats, orient='index').T
         final_df = final_df.reindex(columns=final_df_columns, fill_value=pd.NaT)
-        print(f'saving output to {ct.seg_folder}/{ct.nii_file_name}_stats.tsv')
         final_df.to_csv(f'{ct.seg_folder}/{ct.nii_file_name}_stats.tsv', index=False, sep='\t')
+        del ct.orig_ct
         del ct.orig_img
         del ct.total_seg
+        del ct.total_stats
+        del ct.tissue_stats
+        del ct.vertebrae_stats
+        del ct.aorta_stats
         cp.cuda.MemoryPool().free_all_blocks()
         
     ######### Utility Methods ########
@@ -252,6 +280,71 @@ class SegStats:
         lcc = max(regions, key=lambda x: x.area)
         return lcc
     
+    @classmethod
+    def _folder_list_check(cls, folders):
+        """Set up a list of CT instances using SimpleNameSpace to be comparable to a list of CTScans"""
+        analyzable_cts = []
+        missing_segs = []
+        for folder in folders:
+            # Make sure folder has the proper formatting
+            if folder[-1] == '/':
+                folder = folder[:-1]
+            # Define the holding folder
+            series_folder = '/'.join(folder.split('/')[:-1])
+            # Search for TS output files
+            seg_files = glob(f'{folder}/*.nii.gz')
+            if len(seg_files) == 0:
+                print(f'{folder} is empty!')
+                missing_segs.append(folder)
+                continue
+            # Check that the nifti has all the requisite segmentations
+            has_segs = []
+            for seg in ['total', 'body', 'tissue_types', 'vertebrae']:
+                if any([seg in output for output in seg_files]):
+                    if seg == 'body': 
+                        if any([seg in output and 'vertebrae' not in output for output in seg_files]):
+                            has_segs.append(True)
+                        else:
+                            has_segs.append(False)
+                    else:
+                        has_segs.append(True)
+                else:
+                    has_segs.append(False)
+            if not all(has_segs):
+                print(f'{folder} does not have all necessary segmentations!')
+                missing_segs.append(folder)
+                continue
+            # Find the base name of the nifti file
+            for output in seg_files:
+                if 'tissue_types' in output:
+                    tissue_file = output
+            nii_file_name = tissue_file.split('/')[-1].replace('_tissue_types.nii.gz', '')
+            # Check that the original CT and it's header file exist
+            if not os.path.exists(f'{series_folder}/{nii_file_name}.nii.gz'):
+                print(f'{folder} does not have the original CT file!')
+                missing_segs.append(folder)
+                continue
+            if not os.path.exists(f'{series_folder}/header_info.json'):
+                print(f"{folder} does not have it's header data stored as a json!")
+                missing_segs.append(folder)
+                continue
+            # Set up namespace for CT that would match an input from the Segmentator class
+            ct = SimpleNamespace()
+            ct.input = f'{series_folder}/{nii_file_name}.nii.gz'
+            ct.nii_file_name = nii_file_name
+            ct.seg_folder = folder
+            with open(f'{series_folder}/header_info.json') as f:
+                ct.header_info = json.load(f)
+            ct.mrn = ct.header_info['mrn']
+            ct.accession = ct.header_info['accession']
+            ct.series_name = ct.header_info['series_name']
+            if ct.header_info.get('spacing') is None:
+                ct.header_info['spacing'] = [ct.header_info['length_mm'], ct.header_info['width_mm'], ct.header_info['slice_thickness_mm']]
+            ct.spacing = ct.header_info['spacing']
+            analyzable_cts.append(ct)
+        return analyzable_cts, missing_segs
+            
+                
     @classmethod
     def _ct_list_check(cls, input_cts):
         """a method to check if the input_cts are usable, and if their appropriate output segmentations exist
@@ -286,10 +379,10 @@ class SegStats:
                             analyzable_cts.append(ct)
                         else:
                             print(f'{nii} does not have all segmentations!\n')
-                            missing_segs.append(ct)
+                            missing_segs.append(output_dir)
                     else:
                         print(f'{output_dir} does not exist!')
-                        missing_segs.append(ct)
+                        missing_segs.append(output_dir)
         return analyzable_cts, missing_segs
     
     
