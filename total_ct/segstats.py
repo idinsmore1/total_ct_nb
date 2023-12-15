@@ -49,52 +49,41 @@ class SegStats:
         else:
             self.completed_cts, self.missing_segs = self._ct_list_check(input_cts)
         # Load in the base data necessary for each CT
+        with open('failed_seg_folders.txt', 'a') as f:
+            for folder in self.missing_segs:
+                f.write(f'{folder}\n')
         # self._load_ct_variables()
     
     def process_segmentations(self, max_workers=4):
         """Run multiple threads in memory to speed up process"""
-        # with concurrent_futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        #     futures = [executor.submit(self.measure_segmentation, ct) for ct in self.completed_cts]
-        #     for future in tqdm(
-        #             concurrent_futures.as_completed(futures),
-        #             desc='Measuring segmentations',
-        #             total=len(self.completed_cts),
-        #             dynamic_ncols=True):
-        #         pass
+        with concurrent_futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(self.measure_segmentation, ct) for ct in self.completed_cts]
+            for future in tqdm(
+                    concurrent_futures.as_completed(futures),
+                    desc='Measuring segmentations',
+                    total=len(self.completed_cts),
+                    dynamic_ncols=True):
+                pass
         # # #     # executor.map(self.measure_segmentation, self.completed_cts)
-        for ct in tqdm(self.completed_cts, desc='Measuring Segmentations', dynamic_ncols=True):
-            self.measure_segmentation(ct)
+        # for ct in tqdm(self.completed_cts, desc='Measuring Segmentations', dynamic_ncols=True):
+        #     self.measure_segmentation(ct)
             
     def measure_segmentation(self, ct):
         """Method to analyze all of the segmentations from the output of total_segmentator and save the results"""
-        # try:
-        self.load_ct_attributes(ct)
-        self.measure_total_stats(ct)
-        self.measure_vertebrae_body_and_diameter(ct)
-        self.measure_tissue_stats(ct)
-        self.measure_aorta_stats(ct)
-        if 'asc_aorta_avg_diam' in ct.aorta_stats:
-            if ct.aorta_stats['asc_aorta_avg_diam'] > 38:
-                with open('TAA_asc_segmentations.txt', 'a') as f:
-                    f.write(f'{ct.seg_folder}\n')
-
-        if 'desc_aorta_avg_diam' in ct.aorta_stats:
-            if ct.aorta_stats['desc_aorta_avg_diam'] > 38:
-                with open('TAA_desc_segmentations.txt', 'a') as f:
-                    f.write(f'{ct.seg_folder}\n')
-        if 'abd_aorta_avg_diam' in ct.aorta_stats:
-            if ct.aorta_stats['abd_aorta_avg_diam'] > 30:
-                with open('AAA_segmentations.txt', 'a') as f:
-                    f.write(f'{ct.seg_folder}\n')
-        self.write_output(ct)
-        with open('completed_seg_folders.txt', 'a') as f:
-            f.write(f'{ct.seg_folder}\n')
-                
-        # except Exception as e:
-        #     print(e)
-        #     self.missing_segs.append(f'{ct.seg_folder}')
-        #     with open('failed_seg_folders.txt', 'a') as f:
-        #         f.write(f'{ct.seg_folder}\n')
+        try:
+            self.load_ct_attributes(ct)
+            self.measure_total_stats(ct)
+            self.measure_vertebrae_body_and_diameter(ct)
+            self.measure_tissue_stats(ct)
+            self.measure_aorta_stats(ct)
+            self.check_aorta(ct)
+            self.write_output(ct)
+            with open('completed_seg_folders.txt', 'a') as f:
+                f.write(f'{ct.seg_folder}\t{ct.seg_folder}/{ct.nii_file_name}_stats.tsv\n')
+        except Exception as e:
+            print(e)
+            with open('failed_seg_folders.txt', 'a') as f:
+                f.write(f'{ct.seg_folder}\n')
 
         
     ######### Measurement Methods ########
@@ -180,7 +169,6 @@ class SegStats:
         aorta_stats = {}
         # if the aorta is not available - skip process
         if ct.total_stats['aorta_volume_cm3'] == 0:
-            print(f'Aorta not found in {ct.seg_folder}/{ct.nii_file_name}_total.nii.gz\n')
             ct.aorta_stats = aorta_stats
             return
         # Need these measurements
@@ -257,6 +245,24 @@ class SegStats:
         del ct.vertebrae_stats
         del ct.aorta_stats
         cp.cuda.MemoryPool().free_all_blocks()
+        
+    def check_aorta(self, ct):
+        if 'asc_aorta_avg_diam' in ct.aorta_stats:
+            asc_diam = ct.aorta_stats.get('asc_aorta_avg_diam')
+            if asc_diam is not None and asc_diam > 38:
+                with open('TAA_asc_segmentations.txt', 'a') as f:
+                    f.write(f'{ct.seg_folder}\t{asc_diam}\t{ct.aorta_stats.get("asc_aorta_major_diam")}\n')
+
+        if 'desc_aorta_avg_diam' in ct.aorta_stats:
+            desc_diam = ct.aorta_stats.get('desc_aorta_avg_diam')
+            if desc_diam is not None and desc_diam > 38:
+                with open('TAA_desc_segmentations.txt', 'a') as f:
+                    f.write(f'{ct.seg_folder}\t{desc_diam}\t{ct.aorta_stats.get("desc_aorta_major_diam")}\n')
+        if 'abd_aorta_avg_diam' in ct.aorta_stats:
+            abd_diam = ct.aorta_stats.get('abd_aorta_avg_diam')
+            if abd_diam is not None and abd_diam > 30:
+                with open('AAA_segmentations.txt', 'a') as f:
+                    f.write(f'{ct.seg_folder}\t{abd_diam}\t{ct.aorta_stats.get("abd_aorta_major_diam")}\n')
         
     ######### Utility Methods ########
     def load_ct_attributes(self, ct):

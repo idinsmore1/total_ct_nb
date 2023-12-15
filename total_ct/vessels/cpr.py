@@ -20,6 +20,8 @@ class CurvedPlanarReformation(Centerline):
     def run_process(self, grid_size=80):
         """Method to run and return the outputs of find_max_diameter"""
         self.create_centerline(self.kimimaro_const)
+        if self.centerline is None:
+            return {}
         self.create_straightened_cpr(grid_size)
         self.measure_diameters()
         measurements = self.find_max_diameter()

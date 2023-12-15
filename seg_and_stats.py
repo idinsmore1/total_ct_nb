@@ -24,7 +24,7 @@ args = parser.parse_args()
 # Set the global environment variables
 os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 from total_ct.segmentator import Segmentator
-from total_ct.newanalyze import SegStats
+from total_ct.segstats import SegStats
 from total_ct.utils import block_print
 
 def main():

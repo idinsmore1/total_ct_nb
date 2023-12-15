@@ -4,15 +4,25 @@ from total_ct.vessels.cpr import CurvedPlanarReformation, measure_binary_diamete
 
 class ThoracicAortaCPR(CurvedPlanarReformation):
     """Special instance of the CPR class - need a split based on the aortic arch and two different measurments"""
+    def run_process(self, grid_size=80):
+        """Method to run and return the outputs of find_max_diameter"""
+        self.create_centerline(self.kimimaro_const)
+        if self.centerline is None:
+            return {}, {}
+        self.create_straightened_cpr(grid_size)
+        self.measure_diameters()
+        measurements = self.find_max_diameter()
+        return measurements
+    
     def measure_diameters(self):
         "Method to handle the measurement of the ascending and descending aorta as two separate entities"
         self._split_thoracic_aorta()
         for name, centerline, cpr in zip(['asc', 'desc'], [self.asc_centerline, self.desc_centerline], [self.asc_cpr, self.desc_cpr]):
             measurements = {}
             if name == 'asc':
-                iterator = range(int(len(self.asc_centerline) * 0.4), centerline.shape[0])
+                iterator = range(int(len(centerline) * 0.4), centerline.shape[0])
             else:
-                iterator = range(centerline.shape[0])
+                iterator = range(int(len(centerline) * 0.125), centerline.shape[0])
             for i in iterator:
                 if centerline[i][0] >= self.arch_split:
                     roi = self._smooth_cpr_slice(cpr[i])

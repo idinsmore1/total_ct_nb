@@ -1,6 +1,5 @@
 import os
 import json
-import natsort
 import pydicom
 import dicom2nifti
 import dicom2nifti.settings as settings

@@ -26,6 +26,9 @@ class Centerline(Vessel):
             self.vspacing = self.spacing
         # Generate the centerline
         raw_centerline = self._kimimaro_centerline(kimimaro_const)
+        if raw_centerline is None:
+            self.centerline = None
+            return
         raw_centerline = self.evenly_sample_centerline(raw_centerline, int(len(raw_centerline) * 0.5))
         # smoothed_centerline = self.smooth_centerline(raw_centerline)
         # self.centerline = cp.asanyarray(raw_centerline)
