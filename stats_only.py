@@ -20,7 +20,7 @@ from total_ct.utils import block_print
 def main():
     # load the folders
     with open(args.input_folders) as f:
-        all_folders = f.read().splitlines()[5:10]
+        all_folders = f.read().splitlines()
         ct_iterator = iter(all_folders)
         
     total_batches = ceil(len(all_folders) / args.batch_size)

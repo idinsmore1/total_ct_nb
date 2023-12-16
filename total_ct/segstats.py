@@ -49,7 +49,7 @@ class SegStats:
         else:
             self.completed_cts, self.missing_segs = self._ct_list_check(input_cts)
         # Load in the base data necessary for each CT
-        with open('failed_seg_folders.txt', 'a') as f:
+        with open('missing_seg_folders.txt', 'a') as f:
             for folder in self.missing_segs:
                 f.write(f'{folder}\n')
         # self._load_ct_variables()
