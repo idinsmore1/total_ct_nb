@@ -201,7 +201,7 @@ class SegStats:
             aorta_stats.update(abd_measurements)
         # Thorax
         # Get the T4 midline - if it exists, this is a good indicator that the entire thoracic aorta is in the image
-        t4_midline = midlines['vertebrae_T4']['midline']
+        t4_midline = midlines['vertebrae_T4'].get('midline')
         # Get the regions of the thoracic aorta - if it doesn't exist at all we won't perform CPR
         thoracic_midlines = [*[midlines[f'vertebrae_T{i}']['midline'] for i in range(1, 13)], midlines[f'vertebrae_L1']['midline']]
         thoracic_midlines = [x for x in thoracic_midlines if x is not None]
@@ -210,7 +210,7 @@ class SegStats:
         else:
             min_thor_midline = None
         # Split the aorta
-        if min_thor_midline is not None:
+        if min_thor_midline is not None and t4_midline is not None:
             thor_orig = ct.orig_img[..., min_thor_midline:]
             thor_segs = ct.total_seg[..., min_thor_midline:]
             thor_aorta = ThoracicAortaCPR(thor_orig, thor_segs, spacing, 'total', 'aorta', 35)
