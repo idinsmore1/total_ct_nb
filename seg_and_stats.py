@@ -63,6 +63,9 @@ def main():
         # Pass the finished cts to the CTStats class 
         stats = SegStats(finished_cts)
         stats.process_segmentations(max_workers=10)
+        with open(args.tracker_file, 'a') as f:
+            for ct in batch_list:
+                f.write(f'{ct}\n')
         batch_num += 1
         
     

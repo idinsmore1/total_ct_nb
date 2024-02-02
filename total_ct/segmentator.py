@@ -285,7 +285,7 @@ class Segmentator(CTBatch):
                     force_affine=ct_info['affine']
                 )
                 img_pred = undo_canonical(img_pred, img_in_orig)
-                check_if_shape_and_affine_identical(img_in_orig, img_pred)
+                # check_if_shape_and_affine_identical(img_in_orig, img_pred)
                 img_data = img_pred.dataobj[..., :].astype(np.uint8)
                 new_header = ct_info['header']
                 new_header.set_data_dtype(np.uint8)

@@ -6,7 +6,7 @@ import dicom2nifti.settings as settings
 import numpy as np
 from datetime import datetime
 from glob import glob
-from shutil import copy
+from shutil import copy, SameFileError
 
 
 class CTScan:
@@ -64,23 +64,31 @@ class CTScan:
     def set_nifti_attr(self, input_ct, save_copy):
         """method to set the necessary attributes for a nifti file
         """
-        nifti_folder = '/'.join(input_ct.split('/')[:-1])
-        self.input = [input_ct]
-        self.nii_file_name = [x.split('/')[-1].replace('.nii.gz', '') for x in self.input]
-        
-        if os.path.exists(f'{nifti_folder}/header_info.json'):
-            self.set_header_attr(f'{nifti_folder}/header_info.json')
-            self.usable = True
-        else:
-            print(f'{input_ct} has no header file, it will be skipped in analysis\n')
-            self.usable = False
-        # Set the output directory 
-        self.output_dir = f'{self.base_dir}/{self.mrn}/{self.accession}/{self.series_name}/'
-        if not os.path.exists(self.output_dir):
-            print(f'Output path does not exist, generating {self.output_dir}\n')
-            os.makedirs(self.output_dir)
-        if save_copy:
-            copy(input_ct, self.output_dir)
+        try:
+            nifti_folder = '/'.join(input_ct.split('/')[:-1])
+            self.input = [input_ct]
+            self.nii_file_name = [x.split('/')[-1].replace('.nii.gz', '') for x in self.input]
+
+            if os.path.exists(f'{nifti_folder}/header_info.json'):
+                self.set_header_attr(f'{nifti_folder}/header_info.json')
+                self.usable = True
+            else:
+                print(f'{input_ct} has no header file, it will be skipped in analysis\n')
+                self.usable = False
+                return
+            # Set the output directory 
+            self.output_dir = f'{self.base_dir}/{self.mrn}/{self.accession}/{self.series_name}/'
+            if not os.path.exists(self.output_dir):
+                print(f'Output path does not exist, generating {self.output_dir}\n')
+                os.makedirs(self.output_dir)
+            if save_copy:
+                try:
+                    copy(input_ct, self.output_dir)
+                except SameFileError as e:
+                    print(f'{input_ct} already exists in {self.output_dir}')
+        except AttributeError as e:
+            print(e)
+            self.usable=False
             
     def set_header_attr(self, header_file=None):
         if header_file is not None:
@@ -144,9 +152,10 @@ class CTScan:
 
                 series_info[column] = value
 
-            except AttributeError:
+            except Exception as e:
                 series_info[column] = None
-        series_info['spacing'] = [float(header.PixelSpacing[0]), float(header.PixelSpacing[1]), float(header.SliceThickness)]
+                
+        series_info['spacing'] = [series_info.get('length_mm'), series_info.get('width_mm'), series_info.get('slice_thickness_mm')]
         self.header_info = series_info
         self.set_header_attr()
         self.first_dicom = dicom_file
